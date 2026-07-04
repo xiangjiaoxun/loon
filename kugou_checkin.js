@@ -20,10 +20,13 @@ async function executeCheckIn() {
         await new Promise((resolve) => {
             const options = { url: req.url, headers: req.headers, body: req.body };
             const callback = (error, response, data) => {
-                if (!error && data) {
+                if (error) {
+                    console.log(`[酷狗签到] 接口 ${i+1} 请求失败: ${error}`);
+                } else if (data) {
+                    console.log(`[酷狗签到] 接口 ${i+1} 返回数据: ${data}`);
                     try {
                         const res = JSON.parse(data);
-                        const resStr = JSON.stringify(res).toLowerCase();
+                        const resStr = JSON.stringify(res);
                         
                         // 提取会员到期时间
                         let expireTime = res.expire || res.vip_end_time || (res.data && (res.data.expire || res.data.vip_end_time || res.data.expiration_time || res.data.rest_days));
@@ -39,15 +42,15 @@ async function executeCheckIn() {
                             $persistentStore.write(expireDateStr, KEY_EXPIRE);
                         }
 
-                        // 解决问题3：精准判定重复签到状态
-                        if (resStr.includes("已签到") || resStr.includes("已经签到") || resStr.includes("重复") || resStr.includes("今天已") || res.code === 20011 || res.status === 20011 || res.code === 30005) {
+                        // 核心逻辑：精准捕捉重复签到状态
+                        if (resStr.includes("已签到") || resStr.includes("已经签到") || resStr.includes("重复") || resStr.includes("今天已") || resStr.includes("checked") || resStr.includes("30005") || res.code === 20011 || res.status === 20011 || res.code === 30005 || res.code === 40003) {
                             isAlready = true;
                         } else if (res.code === 0 || res.status === 0 || res.code === 200 || resStr.includes("成功") || resStr.includes("ok")) {
                             isSuccess = true;
                         }
                     } catch (e) {
                         const rawStr = data.toLowerCase();
-                        if (rawStr.includes("已签到") || rawStr.includes("今天") || rawStr.includes("已经")) isAlready = true;
+                        if (rawStr.includes("已签到") || rawStr.includes("今天") || rawStr.includes("已经") || rawStr.includes("repeat") || rawStr.includes("checked")) isAlready = true;
                         else if (rawStr.includes("成功") || rawStr.includes("ok")) isSuccess = true;
                     }
                 }
@@ -65,7 +68,7 @@ async function executeCheckIn() {
         expireDateStr = $persistentStore.read(KEY_EXPIRE) || "已同步更新";
     }
 
-    // 严格按要求分类通知，一次只弹一个
+    // 严格按要求分类通知：优先判定重复签到
     if (isAlready) {
         $notification.post("酷狗自动签到结果", "", `今日已签到，会员有效期为 ${expireDateStr}`);
     } else if (isSuccess) {
