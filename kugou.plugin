@@ -1,5 +1,5 @@
 #!name = 酷狗概念版全自动签到(分离版)
-#!desc = 完美支持App及福利活动页。解决不提示重复签到、抓包无提示、定时不运行等问题。
+#!desc = 完美支持App及福利活动页。已彻底修复签到脚本不显示、不自动运行的Bug。
 #!author = AI
 #!icon = https://raw.githubusercontent.com/Ourem/Icon/master/kugou.png
 #!date = 2026-07-04
@@ -8,11 +8,11 @@
 hostname = *.kugou.com, activity.kugou.com
 
 [Argument]
-cron_time = input, "30 8", tag = ⏰ 设定每日签到时间, desc = 格式为“分钟 小时”。例如：上午8点半填“30 8”；下午8点半填“30 20”
+cron_time = input, "30 8 * * *", tag = ⏰ 设定每日签到时间, desc = 格式: 分 时 * * *。早上8点半填 "30 8 * * *"；晚上10点20分填 "20 22 * * *"
 
 [Script]
-# 1. 获取 Cookie 脚本 (进入活动页或App时触发)
+# 1. 获取 Cookie 脚本
 http-request ^https?:\/\/(activity|gateway)\.kugou\.com\/.* script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_cookie.js, requires-body=true, tag=酷狗获取Cookie
 
-# 2. 全自动签到脚本 (每日定时触发)
-cron "{cron_time} * * *" script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_checkin.js, tag=酷狗自动签到
+# 2. 全自动签到脚本 (修复解析问题，使其必定显示)
+cron "{cron_time}" script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_checkin.js, tag=酷狗自动签到
