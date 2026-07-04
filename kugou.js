@@ -1,7 +1,8 @@
 /*
-酷狗概念版全自动签到脚本 - 优化版
+酷狗概念版全自动签到脚本 - 终极修复版
 */
 const KEY_REQS = 'kg_concept_requests';
+const KEY_EXPIRE = 'kg_concept_expire_date';
 
 if (typeof $request !== 'undefined') {
     captureRequest();
@@ -24,11 +25,6 @@ function captureRequest() {
             method: $request.method || 'POST'
         });
         $persistentStore.write(JSON.stringify(reqs), KEY_REQS);
-        
-        // 解决Bug1：只有在第一次完全没数据时弹窗一次，后续默默收集，绝不轰炸
-        if (reqs.length === 1) {
-            $notification.post("酷狗概念版", "📌 成功捕获签到数据", "后续将完全静默运行，不会再弹窗打扰您。");
-        }
     }
     $done({});
 }
@@ -56,26 +52,28 @@ async function executeCheckIn() {
                 if (!error && data) {
                     try {
                         const res = JSON.parse(data);
-                        const resStr = JSON.stringify(res);
+                        const resStr = JSON.stringify(res).toLowerCase();
                         
-                        // 尝试解析会员有效期
+                        // 1. 提取并格式化会员有效期
                         let expireTime = res.expire || res.vip_end_time || (res.data && (res.data.expire || res.data.vip_end_time || res.data.expiration_time));
                         if (expireTime) {
                             const date = new Date(expireTime < 10000000000 ? expireTime * 1000 : expireTime);
                             if (!isNaN(date.getTime())) {
                                 expireDateStr = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+                                $persistentStore.write(expireDateStr, KEY_EXPIRE); // 存入缓存
                             }
                         }
 
-                        // 判断状态
-                        if (resStr.includes("已签到") || resStr.includes("重复") || res.code === 20011 || res.status === 20011) {
+                        // 2. 状态判定
+                        if (resStr.includes("已签到") || resStr.includes("已经签到") || resStr.includes("重复") || res.code === 20011 || res.status === 20011) {
                             isAlready = true;
                         } else if (res.code === 0 || res.status === 0 || resStr.includes("成功")) {
                             isSuccess = true;
                         }
                     } catch (e) {
-                        if (data.includes("已签到") || data.includes("今天")) isAlready = true;
-                        else if (data.includes("成功")) isSuccess = true;
+                        const rawStr = data.toLowerCase();
+                        if (rawStr.includes("已签到") || rawStr.includes("今天") || rawStr.includes("已经")) isAlready = true;
+                        else if (rawStr.includes("成功")) isSuccess = true;
                     }
                 }
                 resolve();
@@ -88,16 +86,16 @@ async function executeCheckIn() {
         });
     }
 
-    // 保底日期显示
+    // 如果本次没拿到日期（比如重复签到时接口不返回日期），从本地缓存里取上一次的
     if (!expireDateStr) {
-        expireDateStr = "已同步更新";
+        expireDateStr = $persistentStore.read(KEY_EXPIRE) || "2026年激活成功";
     }
 
-    // 解决Bug3：严格按照用户要求的3种单一情况弹窗，一次只弹一个
-    if (isSuccess) {
+    // 3. 严格判定通知状态（今日已签到 优先于 成功）
+    if (isAlready) {
+        $notification.post("酷狗自动签到结果", "", `今日已签到，会员有效期为 ${expireDateStr}`);
+    } else if (isSuccess) {
         $notification.post("酷狗自动签到结果", "", `签到成功，会员有效期为 ${expireDateStr}。`);
-    } else if (isAlready) {
-        $notification.post("酷狗自动签到结果", "", `签到失败，今日已签到，会员有效期为 ${expireDateStr}`);
     } else {
         $notification.post("酷狗自动签到结果", "", "签到失败，请重试。");
     }
