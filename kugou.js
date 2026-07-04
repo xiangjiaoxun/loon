@@ -1,16 +1,7 @@
+/*
+酷狗概念版全自动签到脚本 - 优化版
+*/
 const KEY_REQS = 'kg_concept_requests';
-
-// 解析 Loon UI 传入的设置参数
-function getArgs() {
-    const args = {};
-    if (typeof $argument !== 'undefined' && $argument) {
-        $argument.split(',').forEach(item => {
-            const parts = item.split('=');
-            if (parts.length === 2) args[parts[0].trim()] = parts[1].trim();
-        });
-    }
-    return args;
-}
 
 if (typeof $request !== 'undefined') {
     captureRequest();
@@ -25,7 +16,7 @@ function captureRequest() {
     
     const exists = reqs.some(r => r.url === $request.url);
     if (!exists) {
-        if (reqs.length >= 5) reqs.shift(); 
+        if (reqs.length >= 3) reqs.shift(); 
         reqs.push({
             url: $request.url,
             headers: $request.headers || {},
@@ -34,10 +25,9 @@ function captureRequest() {
         });
         $persistentStore.write(JSON.stringify(reqs), KEY_REQS);
         
-        // 解决缺点1：如果用户在UI里关闭了通知，或者已经抓过包了，就绝不弹窗轰炸
-        const args = getArgs();
-        if (args.capture_notify !== 'false') {
-            $notification.post("酷狗概念版", "📌 成功捕获签到数据", "数据已存入本地，您现在可以去Loon设置中关闭【允许抓包成功提示】。");
+        // 解决Bug1：只有在第一次完全没数据时弹窗一次，后续默默收集，绝不轰炸
+        if (reqs.length === 1) {
+            $notification.post("酷狗概念版", "📌 成功捕获签到数据", "后续将完全静默运行，不会再弹窗打扰您。");
         }
     }
     $done({});
@@ -46,54 +36,46 @@ function captureRequest() {
 async function executeCheckIn() {
     const saved = $persistentStore.read(KEY_REQS);
     if (!saved) {
-        $notification.post("酷狗自动签到", "", "签到失败，请重试（未找到捕获数据）");
+        $notification.post("酷狗自动签到结果", "", "签到失败，请重试。");
         $done();
         return;
     }
 
     let reqs = [];
     try { reqs = JSON.parse(saved); } catch (e) { $done(); return; }
-    let results = [];
+
+    let isSuccess = false;
+    let isAlready = false;
+    let expireDateStr = "";
 
     for (let i = 0; i < reqs.length; i++) {
         const req = reqs[i];
         await new Promise((resolve) => {
             const options = { url: req.url, headers: req.headers, body: req.body };
             const callback = (error, response, data) => {
-                if (error) {
-                    results.push("签到失败，请重试");
-                } else {
+                if (!error && data) {
                     try {
                         const res = JSON.parse(data);
                         const resStr = JSON.stringify(res);
                         
-                        // 解决缺点3：精准分流三种提示状态
-                        if (resStr.includes("已签到") || resStr.includes("重复") || res.code === 20011 || res.status === 20011) {
-                            results.push("今天已经签到");
-                        } else if (res.code === 0 || res.status === 0 || resStr.includes("成功")) {
-                            // 提取会员有效期
-                            let expireDate = "未返回具体日期";
-                            const expireTime = res.expire || res.vip_end_time || (res.data && (res.data.expire || res.data.vip_end_time || res.data.expiration_time));
-                            if (expireTime) {
-                                if (typeof expireTime === 'number') {
-                                    const date = new Date(expireTime < 10000000000 ? expireTime * 1000 : expireTime);
-                                    expireDate = date.toISOString().split('T')[0];
-                                Reds} else {
-                                    expireDate = expireTime;
-                                }
+                        // 尝试解析会员有效期
+                        let expireTime = res.expire || res.vip_end_time || (res.data && (res.data.expire || res.data.vip_end_time || res.data.expiration_time));
+                        if (expireTime) {
+                            const date = new Date(expireTime < 10000000000 ? expireTime * 1000 : expireTime);
+                            if (!isNaN(date.getTime())) {
+                                expireDateStr = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
                             }
-                            results.push(`成功签到，会员有效期 ${expireDate}`);
-                        } else {
-                            results.push("签到失败，请重试");
+                        }
+
+                        // 判断状态
+                        if (resStr.includes("已签到") || resStr.includes("重复") || res.code === 20011 || res.status === 20011) {
+                            isAlready = true;
+                        } else if (res.code === 0 || res.status === 0 || resStr.includes("成功")) {
+                            isSuccess = true;
                         }
                     } catch (e) {
-                        if (data.includes("已签到") || data.includes("今天")) {
-                            results.push("今天已经签到");
-                        } else if (data.includes("成功")) {
-                            results.push("成功签到，会员有效期已更新");
-                        } else {
-                            results.push("签到失败，请重试");
-                        }
+                        if (data.includes("已签到") || data.includes("今天")) isAlready = true;
+                        else if (data.includes("成功")) isSuccess = true;
                     }
                 }
                 resolve();
@@ -106,8 +88,18 @@ async function executeCheckIn() {
         });
     }
 
-    // 过滤重复结果并弹窗
-    const finalResults = [...new Set(results)];
-    $notification.post("酷狗自动签到结果", "", finalResults.join('\n'));
+    // 保底日期显示
+    if (!expireDateStr) {
+        expireDateStr = "已同步更新";
+    }
+
+    // 解决Bug3：严格按照用户要求的3种单一情况弹窗，一次只弹一个
+    if (isSuccess) {
+        $notification.post("酷狗自动签到结果", "", `签到成功，会员有效期为 ${expireDateStr}。`);
+    } else if (isAlready) {
+        $notification.post("酷狗自动签到结果", "", `签到失败，今日已签到，会员有效期为 ${expireDateStr}`);
+    } else {
+        $notification.post("酷狗自动签到结果", "", "签到失败，请重试。");
+    }
     $done();
 }
