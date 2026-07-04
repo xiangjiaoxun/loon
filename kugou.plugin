@@ -8,11 +8,11 @@
 hostname = *.kugou.com, activity.kugou.com
 
 [Argument]
-cron_time = input, "30 8 * * *", tag = ⏰ 设定每日签到时间, desc = 格式: 分 时 * * *。早上8点半填 "30 8 * * *"；晚上10点20分填 "20 22 * * *"
+cron_time = input, "30 8 * * *", tag = ⏰ 设定每日签到时间, desc = 格式: 分 时 * * *。早上8点半填 "30 8 * * *"；晚上10点15分填 "15 22 * * *"
 
 [Script]
 # 1. 获取 Cookie 脚本
 http-request ^https?:\/\/(activity|gateway)\.kugou\.com\/.* script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_cookie.js, requires-body=true, tag=酷狗获取Cookie
 
-# 2. 全自动签到脚本 (修复解析问题，使其必定显示)
-cron "{cron_time}" script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_checkin.js, tag=酷狗自动签到
+# 2. 全自动签到脚本 (去掉了双引号，使其在插件页完美显示为紫色 CRON)
+cron {cron_time} script-path=https://raw.githubusercontent.com/xiangjiaoxun/loon/main/kugou_checkin.js, tag=酷狗自动签到
