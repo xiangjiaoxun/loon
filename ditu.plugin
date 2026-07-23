@@ -1,0 +1,16 @@
+[Plugin]
+#  苹果地图完整版本地自研解锁插件
+policy = DIRECT
+
+[Rewrite]
+# 移除原有的地区限制头
+^https?:\/\/(map-init|.*\.ls)\.apple\.com\/.* header-del X-Apple-Region
+^https?:\/\/(map-init|.*\.ls)\.apple\.com\/.* header-del X-Apple-Country
+
+# 强制注入支持 3D 城市建模和四处看看（Look Around）的区域标识（如美国/日本）
+^https?:\/\/(map-init|.*\.ls)\.apple\.com\/.* header-add X-Apple-Country US
+^https?:\/\/(map-init|.*\.ls)\.apple\.com\/.* header-add X-Apple-Locale en_US
+^https?:\/\/(map-init|.*\.ls)\.apple\.com\/.* header-add X-Apple-Storefront 143441-1,29
+
+[MITM]
+hostname = *.ls.apple.com, map-init.apple.com
