@@ -1,0 +1,11 @@
+#!name=淘宝比价Lite
+#!desc=淘宝历史价格查询
+#!author=yichahucha
+
+[MITM]
+hostname = %APPEND% amdc.m.taobao.com, trade-acs.m.taobao.com
+
+[Script]
+http-request ^http://.+/amdc/mobileDispatch requires-body=1,script-path=https://raw.githubusercontent.com/yichahucha/surge/master/tb_price_lite.js,tag=淘宝比价请求
+
+http-response ^https?://trade-acs\.m\.taobao\.com/gw/mtop\.taobao\.detail\.getdetail requires-body=1,script-path=https://raw.githubusercontent.com/yichahucha/surge/master/tb_price_lite.js,tag=淘宝比价响应
